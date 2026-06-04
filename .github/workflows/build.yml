@@ -1,0 +1,81 @@
+name: WISHLIST Build And Push
+
+on:
+
+  push:
+    branches:
+      - main
+
+  workflow_dispatch:
+
+jobs:
+
+
+  pre-build:
+
+    runs-on: ubuntu-latest
+
+    steps:
+
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+            python-version: "3.11"
+
+      - name: Verify Python
+        run: python --version
+
+      - name: Install Dependencies
+        run: |
+            pip install -r requirements.txt
+
+      - name: Validate Python Syntax
+        run: |
+            python -m py_compile index.py
+
+      - name: Verify Imports
+        run: |
+            python -c "from flask import Flask"
+            python -c "from flask_cors import CORS"
+
+
+  build-and-push:
+        
+    needs: pre-build
+
+    runs-on: ubuntu-latest
+
+    steps:
+
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Configure AWS Credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ap-south-2
+
+      - name: Verify AWS Login
+        run: aws sts get-caller-identity
+
+      - name: Login To Amazon ECR
+        uses: aws-actions/amazon-ecr-login@v2
+
+      - name: Docker Version
+        run: docker --version
+
+      - name: Build WISHLIST Image
+        run: |
+          docker build \
+          -t 663566123253.dkr.ecr.ap-south-2.amazonaws.com/wishlist:v1 \
+          .
+
+      - name: Push WISHLIST Image
+        run: |
+          docker push \
+          663566123253.dkr.ecr.ap-south-2.amazonaws.com/wishlist:v1
