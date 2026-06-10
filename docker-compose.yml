@@ -1,0 +1,17 @@
+services:
+
+  wishlist:
+    image: 663566123253.dkr.ecr.ap-south-2.amazonaws.com/wishlist:${WISHLIST_TAG}
+
+    container_name: wishlist
+
+    ports:
+      - "1003:1003"
+
+    networks:
+      - micro-net
+
+networks:
+  micro-net:
+    external: true
+    
