@@ -123,3 +123,84 @@ jobs:
             docker compose up -d --force-recreate wishlist
 
             docker ps
+
+  notify:
+
+    if: always()
+
+    needs:
+      - pre-build
+      - build-and-push
+      - deploy
+
+    runs-on: ubuntu-latest
+
+    steps:
+
+      - name: Configure AWS Credentials
+        uses: aws-actions/configure-aws-credentials@v4
+
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ap-south-2
+
+      - name: Send SNS Notification
+
+        run: |
+
+          STATUS="${{ needs.deploy.result }}"
+          BUILD_STATUS="${{ needs.pre-build.result }}"
+          PUSH_STATUS="${{ needs.build-and-push.result }}"
+          DEPLOY_STATUS="${{ needs.deploy.result }}"
+          if [ "$BUILD_STATUS" != "success" ]; then
+            FAILURE_POINT="Pre-Build"
+          elif [ "$PUSH_STATUS" != "success" ]; then
+            FAILURE_POINT="Build-And-Push"
+          elif [ "$DEPLOY_STATUS" != "success" ]; then
+            FAILURE_POINT="Deploy"
+          else
+            FAILURE_POINT="None"
+          fi
+
+          if [ "$BUILD_STATUS" = "success" ] && \
+            [ "$PUSH_STATUS" = "success" ] && \
+            [ "$DEPLOY_STATUS" = "success" ]; then
+
+            OVERALL_STATUS="SUCCESS"
+
+          else
+
+            OVERALL_STATUS="FAILURE"
+
+          fi
+
+          aws sns publish \
+          --region ap-south-2 \
+          --topic-arn "${{ secrets.SNS_TOPIC_ARN }}" \
+          --subject "WISHLIST Deployment ${OVERALL_STATUS}" \
+          --message "
+          Repository      : devops_WISHLIST
+
+          Build Number    : ${{ github.run_number }}
+
+          Overall Status  : ${OVERALL_STATUS}
+
+          Pre-Build       : ${BUILD_STATUS}
+
+          Build-And-Push  : ${PUSH_STATUS}
+
+          Deploy          : ${DEPLOY_STATUS}
+
+          Failure Point   : ${FAILURE_POINT}
+
+          Commit          : ${{ github.sha }}
+
+          Workflow        : ${{ github.workflow }}
+
+          Repository URL  :
+          https://github.com/${{ github.repository }}
+
+          Run URL :
+          https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}
+          "
